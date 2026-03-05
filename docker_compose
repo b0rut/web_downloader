@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  youtube-downloader:
+    build: .
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
+    # Optional: mount a volume if you want to persist downloads outside container
+    # volumes:
+    #   - ./downloads:/tmp  # but files are temporary anyway
