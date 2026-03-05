@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5, user-scalable=yes">
+    <title>YouTube Downloader Pro</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        }
+        body {
+            background: linear-gradient(145deg, #f0f4ff 0%, #d9e2ff 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 12px;
+        }
+        .container {
+            max-width: 1000px;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            background: rgba(255,255,255,0.7);
+            backdrop-filter: blur(8px);
+            border-radius: 40px;
+            padding: 12px 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+        }
+        .logo {
+            font-size: 2.5rem;
+            line-height: 1;
+        }
+        .description {
+            font-size: 0.95rem;
+            color: #334155;
+        }
+        .description p {
+            margin: 4px 0;
+        }
+        .card {
+            background: rgba(255,255,255,0.9);
+            backdrop-filter: blur(8px);
+            border-radius: 24px;
+            padding: 18px 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            border: 1px solid rgba(255,255,255,0.5);
+        }
+        .card-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .url-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .url-row input {
+            flex: 1 1 200px;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 40px;
+            font-size: 1rem;
+            background: white;
+        }
+        .url-row input:focus {
+            outline: none;
+            border-color: #3b82f6;
+        }
+        button {
+            padding: 12px 20px;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 40px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: 0.15s;
+            box-shadow: 0 4px 6px rgba(59,130,246,0.3);
+            white-space: nowrap;
+        }
+        button:hover {
+            background: #2563eb;
+            transform: scale(1.02);
+        }
+        button:disabled {
+            background: #94a3b8;
+            box-shadow: none;
+            transform: none;
+            cursor: not-allowed;
+        }
+        .info-panel {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            margin: 16px 0 12px;
+            flex-wrap: wrap;
+        }
+        .thumbnail {
+            width: 120px;
+            height: 68px;
+            background: #e2e8f0;
+            border-radius: 12px;
+            overflow: hidden;
+            flex-shrink: 0;
+            border: 2px solid white;
+        }
+        .thumbnail img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .details {
+            flex: 1;
+            min-width: 200px;
+        }
+        .details .title {
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: #0f172a;
+        }
+        .quality-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+            margin: 16px 0 12px;
+        }
+        .radio-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .radio-option {
+            display: flex;
+            align-items: center;
+            background: #f1f5f9;
+            padding: 6px 14px;
+            border-radius: 40px;
+            border: 2px solid transparent;
+            transition: all 0.1s;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        .radio-option.selected {
+            border-color: #3b82f6;
+            background: #dbeafe;
+        }
+        .radio-option input[type="radio"] {
+            margin-right: 6px;
+            accent-color: #3b82f6;
+        }
+        .bitrate-row {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin: 10px 0;
+            flex-wrap: wrap;
+        }
+        .bitrate-select {
+            padding: 6px 12px;
+            border-radius: 40px;
+            border: 2px solid #e2e8f0;
+            background: white;
+            font-size: 0.9rem;
+        }
+        .audio-format-select, .custom-format-select {
+            padding: 6px 12px;
+            border-radius: 40px;
+            border: 2px solid #e2e8f0;
+            background: white;
+            font-size: 0.9rem;
+        }
+        .extra-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px 20px;
+            margin: 16px 0 8px;
+            padding: 12px 0;
+            border-top: 1px dashed #cbd5e1;
+            border-bottom: 1px dashed #cbd5e1;
+        }
+        .extra-options label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.9rem;
+            white-space: nowrap;
+        }
+        .queue-section {
+            margin-top: 8px;
+        }
+        .queue-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .queue-count {
+            background: #3b82f6;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 40px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        .queue-list {
+            background: #f8fafc;
+            border-radius: 20px;
+            padding: 8px;
+            max-height: 300px;
+            overflow-y: auto;
+            border: 2px solid #e2e8f0;
+            margin: 12px 0;
+        }
+        .queue-item {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding: 10px;
+            border-radius: 16px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            border-bottom: 1px solid #e2e8f0;
+            background: white;
+            margin-bottom: 6px;
+        }
+        .queue-item:last-child {
+            border-bottom: none;
+        }
+        .queue-item.selected {
+            outline: 2px solid #3b82f6;
+            background: #f0f9ff;
+        }
+        .item-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .item-thumb {
+            width: 50px;
+            height: 28px;
+            background: #cbd5e1;
+            border-radius: 6px;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+        .item-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .item-number {
+            font-weight: 600;
+            color: #475569;
+            min-width: 28px;
+        }
+        .item-title {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .item-options {
+            background: #e2e8f0;
+            padding: 2px 8px;
+            border-radius: 30px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #1e293b;
+            white-space: nowrap;
+        }
+        .item-progress {
+            width: 100%;
+            height: 20px;
+            background: #e2e8f0;
+            border-radius: 30px;
+            overflow: hidden;
+            position: relative;
+            margin-top: 4px;
+        }
+        .progress-fill-item {
+            height: 100%;
+            background: linear-gradient(90deg, #3b82f6, #60a5fa);
+            width: 0%;
+            transition: width 0.2s;
+        }
+        .progress-text {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: white;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+            pointer-events: none;
+        }
+        .btn-group {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin: 8px 0;
+        }
+        .progress-area {
+            margin-top: 16px;
+        }
+        .progress-bar {
+            height: 16px;
+            background: #e2e8f0;
+            border-radius: 40px;
+            overflow: hidden;
+            margin: 8px 0;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3b82f6, #60a5fa);
+            width: 0%;
+            transition: width 0.2s;
+        }
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            color: #334155;
+            flex-wrap: wrap;
+        }
+        .current-file {
+            font-weight: 500;
+            max-width: 60%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .footer-note {
+            text-align: center;
+            font-size: 0.8rem;
+            color: #64748b;
+            margin-top: 8px;
+        }
+        @media (max-width: 600px) {
+            .container { gap: 12px; }
+            .card { padding: 14px; }
+            .url-row button { flex: 1; }
+            .quality-row { flex-direction: column; align-items: stretch; }
+            .radio-group { justify-content: center; }
+            .extra-options label { white-space: normal; }
+            .btn-group button { flex: 1; }
+            .header { flex-direction: column; text-align: center; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <!-- Logo & description -->
+    <div class="header">
+        <div class="logo">🎬📥</div>
+        <div class="description">
+            <p><strong>YouTube Downloader Pro</strong> – Download videos & audio in high quality.</p>
+            <p>⚡ Paste a URL, choose quality, add to queue, and start. Files are temporary on server, delivered automatically.</p>
+            <p>🔁 Supports playlists, subtitles, thumbnails, metadata, and audio bitrate selection.</p>
+        </div>
+    </div>
+
+    <!-- Main card -->
+    <div class="card">
+        <div class="card-title">🔗 Video URL</div>
+        <div class="url-row">
+            <input type="text" id="urlInput" placeholder="Paste video URL...">
+            <button id="fetchBtn">Fetch Info</button>
+        </div>
+
+        <!-- Video info (appears after fetch) -->
+        <div class="info-panel" id="infoPanel" style="display: none;">
+            <div class="thumbnail" id="thumbnail"></div>
+            <div class="details">
+                <div class="title" id="title"></div>
+                <div id="duration" style="font-size:0.9rem; color:#475569;"></div>
+            </div>
+        </div>
+
+        <!-- Quality section (hidden until fetch) -->
+        <div id="qualitySection" style="display: none;">
+            <div class="quality-row">
+                <span style="font-weight:500;">Quality:</span>
+                <div class="radio-group" id="qualityRadioGroup">
+                    <label class="radio-option" id="optBestCombined">
+                        <input type="radio" name="quality" value="best_combined" checked> Combined
+                    </label>
+                    <label class="radio-option" id="optAudioOnly">
+                        <input type="radio" name="quality" value="audio_only"> Audio
+                    </label>
+                    <label class="radio-option" id="optCustom">
+                        <input type="radio" name="quality" value="custom"> Custom
+                    </label>
+                </div>
+            </div>
+
+            <!-- Audio format + bitrate (shown when audio selected) -->
+            <div id="audioFormatRow" style="display: none; margin-bottom: 10px;">
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                    <label>Format:
+                        <select id="audioFormat" class="audio-format-select">
+                            <option value="mp3">MP3</option>
+                            <option value="m4a">M4A (AAC)</option>
+                            <option value="wav">WAV</option>
+                            <option value="aac">AAC</option>
+                            <option value="opus">Opus</option>
+                            <option value="flac">FLAC</option>
+                        </select>
+                    </label>
+                    <label>Bitrate:
+                        <select id="audioBitrate" class="bitrate-select">
+                            <option value="128">128 kbps</option>
+                            <option value="192" selected>192 kbps</option>
+                            <option value="256">256 kbps</option>
+                            <option value="320">320 kbps</option>
+                        </select>
+                    </label>
+                </div>
+                <div style="font-size:0.85rem; color:#475569; margin-top:5px;">
+                    ⓘ Selected: <span id="audioQualityPreview">MP3 @ 192 kbps</span>
+                </div>
+            </div>
+
+            <!-- Custom format dropdown (shown when custom selected) -->
+            <div id="customFormatRow" style="display: none; margin-bottom: 10px;">
+                <select id="formatSelect" class="custom-format-select" disabled style="width:100%;">
+                    <option>Fetch info first</option>
+                </select>
+            </div>
+
+            <!-- Extra options -->
+            <div class="extra-options">
+                <label><input type="checkbox" id="optPlaylist"> Playlist</label>
+                <label><input type="checkbox" id="optSubs"> Subtitles</label>
+                <label><input type="checkbox" id="optEmbedThumb"> Thumbnail</label>
+                <label><input type="checkbox" id="optEmbedMeta"> Metadata</label>
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-top: 12px;">
+                <button id="addToQueueBtn" disabled style="flex:1;">➕ Add to Queue</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Queue & Progress card -->
+    <div class="card">
+        <div class="card-title">📋 Queue & Progress</div>
+        
+        <!-- Batch URL input -->
+        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+            <input type="text" id="batchUrls" placeholder="Paste multiple URLs (comma/space)" style="flex:1; padding:10px; border-radius:40px; border:2px solid #e2e8f0;">
+            <button id="addUrlsBtn">Add</button>
+        </div>
+
+        <!-- Queue header with count -->
+        <div class="queue-header">
+            <span style="font-weight:600;">Download Queue</span>
+            <span class="queue-count" id="queueCount">0 items</span>
+        </div>
+
+        <!-- Queue list -->
+        <div class="queue-list" id="queueList"></div>
+
+        <!-- Queue action buttons -->
+        <div class="btn-group">
+            <button id="removeSelectedBtn">Remove</button>
+            <button id="clearQueueBtn">Clear</button>
+            <button id="startQueueBtn" style="background:#059669;">▶ Start Queue</button>
+        </div>
+
+        <!-- Overall progress area -->
+        <div class="progress-area">
+            <div class="status-row">
+                <span class="current-file" id="currentFile">-</span>
+                <span id="speed">-</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div style="text-align:center; font-weight:500; color:#3b82f6; margin-top:6px;" id="status">Ready</div>
+        </div>
+
+        <div class="footer-note">
+            ⚡ Files are temporary on server – they will be delivered to your browser automatically.
+        </div>
+    </div>
+</div>
+
+<script>
+    // ---------- State ----------
+    let currentInfo = null;
+    let queue = []; // each item: {url, title, thumb, options, progress (0-100), downloadId?}
+    let formatList = [];
+
+    // DOM elements
+    const urlInput = document.getElementById('urlInput');
+    const fetchBtn = document.getElementById('fetchBtn');
+    const infoPanel = document.getElementById('infoPanel');
+    const thumbnailDiv = document.getElementById('thumbnail');
+    const titleEl = document.getElementById('title');
+    const durationEl = document.getElementById('duration');
+    const qualitySection = document.getElementById('qualitySection');
+    const formatSelect = document.getElementById('formatSelect');
+    const audioFormatRow = document.getElementById('audioFormatRow');
+    const audioFormat = document.getElementById('audioFormat');
+    const audioBitrate = document.getElementById('audioBitrate');
+    const audioQualityPreview = document.getElementById('audioQualityPreview');
+    const customFormatRow = document.getElementById('customFormatRow');
+    const qualityRadios = document.querySelectorAll('input[name="quality"]');
+    const optPlaylist = document.getElementById('optPlaylist');
+    const optSubs = document.getElementById('optSubs');
+    const optEmbedThumb = document.getElementById('optEmbedThumb');
+    const optEmbedMeta = document.getElementById('optEmbedMeta');
+    const addToQueueBtn = document.getElementById('addToQueueBtn');
+    const queueList = document.getElementById('queueList');
+    const queueCount = document.getElementById('queueCount');
+    const addUrlsBtn = document.getElementById('addUrlsBtn');
+    const removeSelectedBtn = document.getElementById('removeSelectedBtn');
+    const clearQueueBtn = document.getElementById('clearQueueBtn');
+    const startQueueBtn = document.getElementById('startQueueBtn');
+    const batchUrls = document.getElementById('batchUrls');
+    const progressFill = document.getElementById('progressFill');
+    const speedEl = document.getElementById('speed');
+    const statusEl = document.getElementById('status');
+    const currentFileEl = document.getElementById('currentFile');
+
+    // Helper: update queue display with per‑item progress bars
+    function updateQueueDisplay() {
+        queueList.innerHTML = '';
+        queue.forEach((item, index) => {
+            const div = document.createElement('div');
+            div.className = 'queue-item';
+            div.dataset.index = index;
+            const progress = item.progress || 0;
+            div.innerHTML = `
+                <div class="item-row">
+                    <span class="item-number">${index+1}.</span>
+                    <div class="item-thumb">${item.thumb ? `<img src="${item.thumb}">` : ''}</div>
+                    <span class="item-title">${item.title || 'URL'}</span>
+                    <span class="item-options">${item.options || ''}</span>
+                </div>
+                <div class="item-progress">
+                    <div class="progress-fill-item" style="width: ${progress}%;"></div>
+                    <div class="progress-text">${progress}%</div>
+                </div>
+            `;
+            div.addEventListener('click', () => div.classList.toggle('selected'));
+            queueList.appendChild(div);
+        });
+        queueCount.textContent = `${queue.length} item${queue.length !== 1 ? 's' : ''}`;
+    }
+
+    // Update progress for a specific item (by index)
+    function updateItemProgress(index, percent) {
+        if (queue[index]) {
+            queue[index].progress = percent;
+            // Find the DOM element for this item (by dataset.index) and update its progress bar
+            const items = document.querySelectorAll('.queue-item');
+            for (let el of items) {
+                if (parseInt(el.dataset.index) === index) {
+                    const fill = el.querySelector('.progress-fill-item');
+                    const text = el.querySelector('.progress-text');
+                    if (fill) fill.style.width = percent + '%';
+                    if (text) text.textContent = percent + '%';
+                    break;
+                }
+            }
+        }
+    }
+
+    function getSelectedIndices() {
+        return Array.from(document.querySelectorAll('.queue-item.selected')).map(el => parseInt(el.dataset.index));
+    }
+
+    // Update audio quality preview
+    function updateAudioPreview() {
+        const format = audioFormat.options[audioFormat.selectedIndex].text;
+        const bitrate = audioBitrate.value;
+        audioQualityPreview.textContent = `${format} @ ${bitrate} kbps`;
+    }
+    audioFormat.addEventListener('change', updateAudioPreview);
+    audioBitrate.addEventListener('change', updateAudioPreview);
+
+    // Radio UI update (removed Separate)
+    function updateQualityUI() {
+        const selected = document.querySelector('input[name="quality"]:checked').value;
+        audioFormatRow.style.display = 'none';
+        customFormatRow.style.display = 'none';
+        if (selected === 'audio_only') {
+            audioFormatRow.style.display = 'block';
+            updateAudioPreview();
+        } else if (selected === 'custom') {
+            customFormatRow.style.display = 'block';
+            formatSelect.disabled = false;
+        } else {
+            formatSelect.disabled = true;
+        }
+    }
+    qualityRadios.forEach(r => r.addEventListener('change', updateQualityUI));
+
+    // Visual highlight for radio labels
+    document.querySelectorAll('.radio-option').forEach(opt => {
+        opt.addEventListener('click', function(e) {
+            if (e.target.tagName !== 'INPUT') {
+                this.querySelector('input').checked = true;
+                updateQualityUI();
+            }
+        });
+    });
+
+    // Fetch info
+    fetchBtn.addEventListener('click', async () => {
+        const url = urlInput.value.trim();
+        if (!url) return;
+        statusEl.textContent = 'Fetching...';
+        try {
+            const resp = await fetch('/api/info', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({url})
+            });
+            const data = await resp.json();
+            if (data.error) throw new Error(data.error);
+            currentInfo = data;
+            formatList = data.formats;
+
+            // Show info panel
+            infoPanel.style.display = 'flex';
+            titleEl.textContent = data.title;
+            if (data.duration) {
+                const mins = Math.floor(data.duration / 60);
+                const secs = data.duration % 60;
+                durationEl.textContent = `${mins}:${secs.toString().padStart(2,'0')}`;
+            } else durationEl.textContent = 'N/A';
+            thumbnailDiv.innerHTML = data.thumbnail ? `<img src="${data.thumbnail}">` : 'No thumb';
+
+            // Populate custom format dropdown
+            formatSelect.innerHTML = '';
+            data.formats.forEach(f => {
+                const type = (f.vcodec!='none' && f.acodec!='none') ? '🎬' : (f.vcodec!='none' ? '🎥' : '🎵');
+                const label = `${type} ${f.resolution} | ${f.ext} | ${f.filesize_str}`;
+                const opt = document.createElement('option');
+                opt.value = f.format_id;
+                opt.textContent = label;
+                formatSelect.appendChild(opt);
+            });
+            formatSelect.disabled = false;
+
+            qualitySection.style.display = 'block';
+            addToQueueBtn.disabled = false;
+            statusEl.textContent = 'Ready to add to queue';
+        } catch (err) {
+            statusEl.textContent = 'Error: ' + err.message;
+        }
+    });
+
+    // Add to queue – capture current quality options
+    addToQueueBtn.addEventListener('click', () => {
+        if (!currentInfo) return;
+        const selectedQuality = document.querySelector('input[name="quality"]:checked').value;
+        let optionsText = '';
+        if (selectedQuality === 'best_combined') {
+            optionsText = '🎬 Combined';
+        } else if (selectedQuality === 'audio_only') {
+            const format = audioFormat.options[audioFormat.selectedIndex].text;
+            const bitrate = audioBitrate.value;
+            optionsText = `🎵 ${format} ${bitrate}k`;
+        } else if (selectedQuality === 'custom') {
+            // Could also show the selected format description, but keep simple
+            optionsText = '⚙️ Custom';
+        }
+        queue.push({
+            url: urlInput.value.trim(),
+            title: currentInfo.title,
+            thumb: currentInfo.thumbnail,
+            options: optionsText,
+            progress: 0
+        });
+        updateQueueDisplay();
+    });
+
+    // Batch add URLs (no thumbnails, no options)
+    addUrlsBtn.addEventListener('click', () => {
+        const text = batchUrls.value.trim();
+        if (!text) return;
+        const urls = text.split(/[,\s]+/).filter(u => u.startsWith('http'));
+        urls.forEach(u => queue.push({url: u, title: u, options: '?', progress: 0}));
+        updateQueueDisplay();
+        batchUrls.value = '';
+    });
+
+    removeSelectedBtn.addEventListener('click', () => {
+        const indices = getSelectedIndices();
+        queue = queue.filter((_, i) => !indices.includes(i));
+        updateQueueDisplay();
+    });
+
+    clearQueueBtn.addEventListener('click', () => {
+        queue = [];
+        updateQueueDisplay();
+    });
+
+    // Start queue
+    startQueueBtn.addEventListener('click', async () => {
+        if (queue.length === 0) return alert('Queue empty');
+
+        startQueueBtn.disabled = true;
+        addToQueueBtn.disabled = true;
+
+        // Reset all item progresses to 0
+        queue.forEach((_, idx) => updateItemProgress(idx, 0));
+
+        for (let i = 0; i < queue.length; i++) {
+            const item = queue[i];
+            statusEl.textContent = `Item ${i+1}/${queue.length}`;
+            currentFileEl.textContent = item.title || item.url;
+
+            const selectedQuality = document.querySelector('input[name="quality"]:checked').value;
+            let formatId = null;
+            let options = {
+                audio_only: selectedQuality === 'audio_only',
+                audio_format: audioFormat.value,
+                audio_bitrate: audioBitrate.value,
+                playlist: optPlaylist.checked,
+                subs: optSubs.checked,
+                embed_thumb: optEmbedThumb.checked,
+                embed_meta: optEmbedMeta.checked,
+                quality_choice: ''
+            };
+            if (selectedQuality === 'best_combined') options.quality_choice = 'Best combined';
+            else if (selectedQuality === 'custom') formatId = formatSelect.value;
+
+            try {
+                const resp = await fetch('/api/download', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({url: item.url, format_id: formatId, options})
+                });
+                const data = await resp.json();
+                if (data.error) throw new Error(data.error);
+                const downloadId = data.download_id;
+                // Store downloadId in item for possible future use
+                queue[i].downloadId = downloadId;
+
+                // Listen to progress via SSE
+                await new Promise((resolve, reject) => {
+                    const es = new EventSource(`/api/progress/${downloadId}`);
+                    es.addEventListener('progress', (e) => {
+                        const p = JSON.parse(e.data);
+                        // Update overall progress bar (current item)
+                        progressFill.style.width = p.progress + '%';
+                        speedEl.textContent = `${p.speed} / ${p.eta}`;
+                        // Update per-item progress
+                        updateItemProgress(i, p.progress);
+                    });
+                    es.addEventListener('finished', async (e) => {
+                        es.close();
+                        // Mark item as 100%
+                        updateItemProgress(i, 100);
+                        const fileData = JSON.parse(e.data);
+                        try {
+                            const fileResp = await fetch(fileData.file);
+                            if (!fileResp.ok) throw new Error(await fileResp.text());
+                            const blob = await fileResp.blob();
+                            const url = window.URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            const cd = fileResp.headers.get('Content-Disposition');
+                            a.download = cd ? cd.split('filename=')[1].replace(/"/g,'') : 'download';
+                            document.body.appendChild(a);
+                            a.click();
+                            a.remove();
+                            window.URL.revokeObjectURL(url);
+                            resolve();
+                        } catch (err) { reject(err); }
+                    });
+                    es.addEventListener('error', (e) => {
+                        es.close();
+                        reject(new Error(e.data || 'Connection lost'));
+                    });
+                });
+            } catch (err) {
+                statusEl.textContent = `❌ ${err.message}`;
+                // Mark item progress as error? could set to 0 or keep as is
+            }
+        }
+        statusEl.textContent = '📦 Your files are being delivered...';
+        setTimeout(() => {
+            statusEl.textContent = '✅ All files delivered!';
+        }, 2000);
+        startQueueBtn.disabled = false;
+        addToQueueBtn.disabled = false;
+        progressFill.style.width = '0%';
+        speedEl.textContent = '-';
+        currentFileEl.textContent = '-';
+    });
+
+    // Initial display
+    updateQueueDisplay();
+    updateAudioPreview();
+</script>
+</body>
+</html>
