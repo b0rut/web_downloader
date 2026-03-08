@@ -35,6 +35,47 @@ CORS(app)
 downloads = {}
 batches = {}
 
+# ---------- YouTube Cookie Configuration ----------
+YT_COOKIES_METHOD = os.environ.get('YT_COOKIES_METHOD', 'browser').lower()
+YT_COOKIES_FILE = os.environ.get('YT_COOKIES_FILE', '/app/cookies.txt')
+YT_COOKIES_BROWSER = os.environ.get('YT_COOKIES_BROWSER', 'chrome')
+
+print(f"YouTube cookie method: {YT_COOKIES_METHOD}")
+if YT_COOKIES_METHOD == 'file':
+    if os.path.exists(YT_COOKIES_FILE):
+        print(f"✅ Cookies file found at: {YT_COOKIES_FILE}")
+    else:
+        print(f"⚠️  Warning: Cookies file not found at: {YT_COOKIES_FILE}")
+elif YT_COOKIES_METHOD == 'browser':
+    print(f"✅ Using browser cookies from: {YT_COOKIES_BROWSER}")
+
+def add_cookie_options(ydl_opts):
+    """Add cookie authentication options to yt-dlp configuration"""
+    if YT_COOKIES_METHOD == 'browser':
+        ydl_opts['cookiesfrombrowser'] = (YT_COOKIES_BROWSER,)
+        print("📦 Added browser cookie authentication")
+    elif YT_COOKIES_METHOD == 'file' and os.path.exists(YT_COOKIES_FILE):
+        ydl_opts['cookiefile'] = YT_COOKIES_FILE
+        # Tell yt-dlp not to write back to the cookie file (read-only)
+        ydl_opts['extractor_args'] = {
+            'youtube': {
+                'cookiefile': [YT_COOKIES_FILE],
+                'no_write_cookies': ['true']
+            }
+        }
+        print(f"📦 Added cookie file authentication (read-only): {YT_COOKIES_FILE}")
+    
+    # Add headers to look like a real browser
+    ydl_opts.setdefault('headers', {})
+    ydl_opts['headers'].update({
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-us,en;q=0.5',
+        'Sec-Fetch-Mode': 'navigate',
+    })
+    
+    return ydl_opts
+
 def format_size(bytes):
     if bytes is None:
         return "N/A"
@@ -44,10 +85,29 @@ def format_size(bytes):
         bytes /= 1024
     return f"{bytes:.1f} TB"
 
-def download_worker(url, ydl_opts, download_id, retry_without_subs=False):
+def download_worker(url, ydl_opts, download_id, retry_without_subs=False, retry_with_best_format=False):
     initial_filepath = None
     final_filepath = None
     base_name = None
+    temp_cookie = None
+
+    # Temporary cookie file handling (same as before)
+    if YT_COOKIES_METHOD == 'file' and os.path.exists(YT_COOKIES_FILE):
+        try:
+            fd, temp_cookie = tempfile.mkstemp(suffix='.txt', prefix='cookies_')
+            os.close(fd)
+            shutil.copy2(YT_COOKIES_FILE, temp_cookie)
+            print(f"[{download_id}] Using temporary cookie file: {temp_cookie}")
+            ydl_opts['cookiefile'] = temp_cookie
+            ydl_opts['extractor_args'] = {
+                'youtube': {
+                    'cookiefile': [temp_cookie],
+                    'no_write_cookies': ['true']
+                }
+            }
+        except Exception as e:
+            print(f"[{download_id}] Failed to create temp cookie file: {e}")
+            ydl_opts['cookiefile'] = YT_COOKIES_FILE
 
     def progress_hook(d):
         nonlocal initial_filepath, base_name
@@ -90,19 +150,62 @@ def download_worker(url, ydl_opts, download_id, retry_without_subs=False):
             ydl.download([url])
     except Exception as e:
         error_str = str(e)
-        # If it's a subtitle 429 error and we haven't retried yet, retry without subs
+        print(f"[{download_id}] Exception: {error_str}")
+
+        # --- Subtitle 429 handling ---
         if 'subtitles' in error_str and '429' in error_str and not retry_without_subs:
             print(f"[{download_id}] Subtitle error (429), retrying without subtitles...")
-            # Remove subtitle options
             ydl_opts.pop('writesubtitles', None)
             ydl_opts.pop('writeautomaticsub', None)
             ydl_opts.pop('subtitleslangs', None)
-            # Recursive call with retry flag
-            return download_worker(url, ydl_opts, download_id, retry_without_subs=True)
-        else:
-            raise
+            time.sleep(2)
+            return download_worker(url, ydl_opts, download_id, retry_without_subs=True, retry_with_best_format=retry_with_best_format)
 
-    # After download, determine final file
+        # --- Format not available handling (catch specific yt-dlp error) ---
+        if isinstance(e, yt_dlp.utils.ExtractorError) and 'format' in error_str.lower():
+            print(f"[{download_id}] Format error detected (ExtractorError)")
+            if not retry_with_best_format:
+                print(f"[{download_id}] Falling back to 'best' format")
+                ydl_opts['format'] = 'best'
+                time.sleep(2)
+                return download_worker(url, ydl_opts, download_id, retry_without_subs=retry_without_subs, retry_with_best_format=True)
+            else:
+                # Already tried best, try common fallbacks
+                fallbacks = ['best[ext=mp4]', 'bestvideo+bestaudio', 'bestaudio', 'worst']
+                for fb in fallbacks:
+                    print(f"[{download_id}] Trying fallback format: {fb}")
+                    ydl_opts['format'] = fb
+                    try:
+                        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                            ydl.download([url])
+                        # If successful, break out of exception handling
+                        break
+                    except Exception as fb_e:
+                        print(f"[{download_id}] Fallback {fb} failed: {fb_e}")
+                        continue
+                else:
+                    # All fallbacks failed
+                    print(f"[{download_id}] All format fallbacks failed")
+                    raise e
+
+        # --- General string-based fallback (catch other variants) ---
+        elif ('Requested format' in error_str or 'not available' in error_str) and not retry_with_best_format:
+            print(f"[{download_id}] Requested format not available (string match), falling back to best")
+            ydl_opts['format'] = 'best'
+            time.sleep(2)
+            return download_worker(url, ydl_opts, download_id, retry_without_subs=retry_without_subs, retry_with_best_format=True)
+
+        # --- YouTube authentication errors ---
+        if 'Sign in to confirm' in error_str or 'bot' in error_str.lower():
+            print(f"[{download_id}] ⚠️ YouTube authentication required. Make sure cookies are properly configured.")
+            downloads[download_id]['status'] = 'error'
+            downloads[download_id]['error'] = 'YouTube requires authentication. Please check cookie configuration.'
+            return
+
+        # Re-raise other errors if not handled
+        raise
+
+    # --- Determine final file (same as before) ---
     if final_filepath:
         downloads[download_id]['filepath'] = final_filepath
         print(f"[{download_id}] using hook filepath: {final_filepath}")
@@ -123,21 +226,18 @@ def download_worker(url, ydl_opts, download_id, retry_without_subs=False):
                         break
 
         if not found:
-            # Fallback: find the most recent file in temp dir with a valid extension
             temp_dir = tempfile.gettempdir()
             now = time.time()
             candidates = []
             for f in os.listdir(temp_dir):
                 f_path = os.path.join(temp_dir, f)
                 if os.path.isfile(f_path):
-                    # Check if file was modified within the last 60 seconds
                     if now - os.path.getmtime(f_path) < 60:
                         ext = os.path.splitext(f)[1].lower()
                         if ext in ['.mp3', '.m4a', '.wav', '.aac', '.opus', '.ogg', '.flac',
                                    '.mp4', '.mkv', '.webm', '.mov', '.avi']:
                             candidates.append((os.path.getmtime(f_path), f_path))
             if candidates:
-                # Choose the most recent
                 candidates.sort(reverse=True)
                 final_filepath = candidates[0][1]
                 print(f"[{download_id}] fallback: using most recent file: {final_filepath}")
@@ -152,6 +252,14 @@ def download_worker(url, ydl_opts, download_id, retry_without_subs=False):
     downloads[download_id]['status'] = 'finished'
     downloads[download_id]['progress'] = 100
     print(f"[{download_id}] ✅ fully finished, file: {downloads[download_id]['filepath']}")
+
+    # Clean up temporary cookie file
+    if temp_cookie and os.path.exists(temp_cookie):
+        try:
+            os.unlink(temp_cookie)
+            print(f"[{download_id}] Removed temporary cookie file")
+        except:
+            pass
 
 @app.route('/')
 def index():
@@ -174,6 +282,9 @@ def get_info():
             'noplaylist': True,
             'socket_timeout': 30,
         }
+        # Add cookie options
+        ydl_opts = add_cookie_options(ydl_opts)
+        
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
 
@@ -201,6 +312,9 @@ def get_info():
         }
         return jsonify(response)
     except Exception as e:
+        error_str = str(e)
+        if 'Sign in to confirm' in error_str or 'bot' in error_str.lower():
+            return jsonify({'error': 'YouTube requires authentication. Please configure cookies in the server.'}), 401
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/download', methods=['POST'])
@@ -231,7 +345,14 @@ def start_download():
         'socket_timeout': 30,
         'extractor_retries': 5,
         'sleep_requests': 1,
+        'sleep_interval': 5,          # Sleep between requests to avoid rate limiting
+        'max_sleep_interval': 10,
+        'sleep_interval_requests': 1,
+        'remote_components': {'ejs': 'npm'},
     }
+
+    # Add cookie options
+    ydl_opts = add_cookie_options(ydl_opts)
 
     if options.get('playlist'):
         ydl_opts['yes_playlist'] = True
@@ -380,8 +501,12 @@ def batch_worker(batch_id):
             'no_warnings': True,
             'format': 'best',
         }
+        # Add cookie options for batch downloads too
+        ydl_opts = add_cookie_options(ydl_opts)
+        
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                print(f"[{download_id}] final ydl_opts: {ydl_opts}")
                 ydl.download([url])
             downloads[download_id]['status'] = 'finished'
         except Exception as e:
@@ -412,5 +537,28 @@ def batch_progress(batch_id):
             time.sleep(1)
     return Response(generate(), mimetype='text/event-stream')
 
+@app.route('/api/cookie-status', methods=['GET'])
+def cookie_status():
+    """Endpoint to check cookie configuration status"""
+    status = {
+        'method': YT_COOKIES_METHOD,
+        'browser': YT_COOKIES_BROWSER if YT_COOKIES_METHOD == 'browser' else None,
+        'file_exists': os.path.exists(YT_COOKIES_FILE) if YT_COOKIES_METHOD == 'file' else None,
+        'file_path': YT_COOKIES_FILE if YT_COOKIES_METHOD == 'file' else None,
+    }
+    
+    # Test YouTube access
+    try:
+        test_opts = {'quiet': True, 'extract_flat': True}
+        test_opts = add_cookie_options(test_opts)
+        with yt_dlp.YoutubeDL(test_opts) as ydl:
+            info = ydl.extract_info('https://www.youtube.com/watch?v=dQw4w9WgXcQ', download=False)
+        status['youtube_test'] = 'success'
+    except Exception as e:
+        status['youtube_test'] = 'failed'
+        status['youtube_error'] = str(e)[:200]
+    
+    return jsonify(status)
+
 if __name__ == '__main__':
-    app.run(debug=True, threaded=True)
+    app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)

@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5, user-scalable=yes">
     <title>YouTube Downloader Pro</title>
     <style>
+        /* (keep all your existing styles - I'm not repeating them to save space, but you must keep them) */
         * {
             margin: 0;
             padding: 0;
@@ -134,7 +135,7 @@
             font-size: 1.1rem;
             color: #0f172a;
         }
-        .quality-row {
+        .type-row, .quality-row {
             display: flex;
             flex-wrap: wrap;
             align-items: center;
@@ -360,7 +361,7 @@
             .container { gap: 12px; }
             .card { padding: 14px; }
             .url-row button { flex: 1; }
-            .quality-row { flex-direction: column; align-items: stretch; }
+            .type-row, .quality-row { flex-direction: column; align-items: stretch; }
             .radio-group { justify-content: center; }
             .extra-options label { white-space: normal; }
             .btn-group button { flex: 1; }
@@ -375,7 +376,7 @@
         <div class="logo">🎬📥</div>
         <div class="description">
             <p><strong>YouTube Downloader Pro</strong> – Download videos & audio in high quality.</p>
-            <p>⚡ Paste a URL, choose quality, add to queue, and start. Files are temporary on server, delivered automatically.</p>
+            <p>⚡ Paste a URL, choose type and quality, add to queue, and start. Files are temporary on server, delivered automatically.</p>
             <p>🔁 Supports playlists, subtitles, thumbnails, metadata, and audio bitrate selection.</p>
         </div>
     </div>
@@ -397,26 +398,44 @@
             </div>
         </div>
 
-        <!-- Quality section (hidden until fetch) -->
+        <!-- Type & Quality section (hidden until fetch) -->
         <div id="qualitySection" style="display: none;">
-            <div class="quality-row">
-                <span style="font-weight:500;">Quality:</span>
-                <div class="radio-group" id="qualityRadioGroup">
-                    <label class="radio-option" id="optBestCombined">
-                        <input type="radio" name="quality" value="best_combined" checked> Combined
+            <!-- Type selector -->
+            <div class="type-row">
+                <span style="font-weight:500;">Type:</span>
+                <div class="radio-group" id="typeRadioGroup">
+                    <label class="radio-option" id="optVideoType">
+                        <input type="radio" name="type" value="video" checked> Video
                     </label>
-                    <label class="radio-option" id="optAudioOnly">
-                        <input type="radio" name="quality" value="audio_only"> Audio
-                    </label>
-                    <label class="radio-option" id="optCustom">
-                        <input type="radio" name="quality" value="custom"> Custom
+                    <label class="radio-option" id="optAudioType">
+                        <input type="radio" name="type" value="audio"> Audio
                     </label>
                 </div>
             </div>
 
-            <!-- Audio format + bitrate (shown when audio selected) -->
-            <div id="audioFormatRow" style="display: none; margin-bottom: 10px;">
-                <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+            <!-- Video quality section (visible when Video selected) -->
+            <div id="videoQualitySection">
+                <div class="quality-row">
+                    <span style="font-weight:500;">Video Quality:</span>
+                    <div class="radio-group" id="videoQualityRadioGroup">
+                        <label class="radio-option"><input type="radio" name="video_quality" value="best" checked> Best</label>
+                        <label class="radio-option"><input type="radio" name="video_quality" value="1080p"> 1080p</label>
+                        <label class="radio-option"><input type="radio" name="video_quality" value="720p"> 720p</label>
+                        <label class="radio-option"><input type="radio" name="video_quality" value="480p"> 480p</label>
+                        <label class="radio-option"><input type="radio" name="video_quality" value="custom"> Custom</label>
+                    </div>
+                </div>
+                <!-- Custom format dropdown (shown when custom selected) -->
+                <div id="videoCustomFormatRow" style="display: none; margin-bottom: 10px;">
+                    <select id="videoFormatSelect" class="custom-format-select" style="width:100%;">
+                        <option>Fetch info first</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Audio section (visible when Audio selected) -->
+            <div id="audioSection" style="display: none;">
+                <div class="bitrate-row">
                     <label>Format:
                         <select id="audioFormat" class="audio-format-select">
                             <option value="mp3">MP3</option>
@@ -441,14 +460,7 @@
                 </div>
             </div>
 
-            <!-- Custom format dropdown (shown when custom selected) -->
-            <div id="customFormatRow" style="display: none; margin-bottom: 10px;">
-                <select id="formatSelect" class="custom-format-select" disabled style="width:100%;">
-                    <option>Fetch info first</option>
-                </select>
-            </div>
-
-            <!-- Extra options -->
+            <!-- Extra options (common) -->
             <div class="extra-options">
                 <label><input type="checkbox" id="optPlaylist"> Playlist</label>
                 <label><input type="checkbox" id="optSubs"> Subtitles</label>
@@ -509,7 +521,7 @@
 <script>
     // ---------- State ----------
     let currentInfo = null;
-    let queue = []; // each item: {url, title, thumb, options, progress (0-100), downloadId?}
+    let queue = [];
     let formatList = [];
 
     // DOM elements
@@ -520,13 +532,15 @@
     const titleEl = document.getElementById('title');
     const durationEl = document.getElementById('duration');
     const qualitySection = document.getElementById('qualitySection');
-    const formatSelect = document.getElementById('formatSelect');
-    const audioFormatRow = document.getElementById('audioFormatRow');
+    const typeRadios = document.querySelectorAll('input[name="type"]');
+    const videoQualitySection = document.getElementById('videoQualitySection');
+    const audioSection = document.getElementById('audioSection');
+    const videoQualityRadios = document.querySelectorAll('input[name="video_quality"]');
+    const videoCustomFormatRow = document.getElementById('videoCustomFormatRow');
+    const videoFormatSelect = document.getElementById('videoFormatSelect');
     const audioFormat = document.getElementById('audioFormat');
     const audioBitrate = document.getElementById('audioBitrate');
     const audioQualityPreview = document.getElementById('audioQualityPreview');
-    const customFormatRow = document.getElementById('customFormatRow');
-    const qualityRadios = document.querySelectorAll('input[name="quality"]');
     const optPlaylist = document.getElementById('optPlaylist');
     const optSubs = document.getElementById('optSubs');
     const optEmbedThumb = document.getElementById('optEmbedThumb');
@@ -544,7 +558,7 @@
     const statusEl = document.getElementById('status');
     const currentFileEl = document.getElementById('currentFile');
 
-    // Helper: update queue display with per‑item progress bars
+    // Helper: update queue display
     function updateQueueDisplay() {
         queueList.innerHTML = '';
         queue.forEach((item, index) => {
@@ -570,11 +584,9 @@
         queueCount.textContent = `${queue.length} item${queue.length !== 1 ? 's' : ''}`;
     }
 
-    // Update progress for a specific item (by index)
     function updateItemProgress(index, percent) {
         if (queue[index]) {
             queue[index].progress = percent;
-            // Find the DOM element for this item (by dataset.index) and update its progress bar
             const items = document.querySelectorAll('.queue-item');
             for (let el of items) {
                 if (parseInt(el.dataset.index) === index) {
@@ -592,7 +604,7 @@
         return Array.from(document.querySelectorAll('.queue-item.selected')).map(el => parseInt(el.dataset.index));
     }
 
-    // Update audio quality preview
+    // Update audio preview
     function updateAudioPreview() {
         const format = audioFormat.options[audioFormat.selectedIndex].text;
         const bitrate = audioBitrate.value;
@@ -601,29 +613,33 @@
     audioFormat.addEventListener('change', updateAudioPreview);
     audioBitrate.addEventListener('change', updateAudioPreview);
 
-    // Radio UI update (removed Separate)
-    function updateQualityUI() {
-        const selected = document.querySelector('input[name="quality"]:checked').value;
-        audioFormatRow.style.display = 'none';
-        customFormatRow.style.display = 'none';
-        if (selected === 'audio_only') {
-            audioFormatRow.style.display = 'block';
-            updateAudioPreview();
-        } else if (selected === 'custom') {
-            customFormatRow.style.display = 'block';
-            formatSelect.disabled = false;
+    // Toggle between video and audio sections
+    function toggleType() {
+        const type = document.querySelector('input[name="type"]:checked').value;
+        if (type === 'video') {
+            videoQualitySection.style.display = 'block';
+            audioSection.style.display = 'none';
         } else {
-            formatSelect.disabled = true;
+            videoQualitySection.style.display = 'none';
+            audioSection.style.display = 'block';
         }
     }
-    qualityRadios.forEach(r => r.addEventListener('change', updateQualityUI));
+    typeRadios.forEach(r => r.addEventListener('change', toggleType));
+
+    // Toggle custom format row for video
+    function toggleVideoCustom() {
+        const quality = document.querySelector('input[name="video_quality"]:checked').value;
+        videoCustomFormatRow.style.display = quality === 'custom' ? 'block' : 'none';
+    }
+    videoQualityRadios.forEach(r => r.addEventListener('change', toggleVideoCustom));
 
     // Visual highlight for radio labels
     document.querySelectorAll('.radio-option').forEach(opt => {
         opt.addEventListener('click', function(e) {
             if (e.target.tagName !== 'INPUT') {
-                this.querySelector('input').checked = true;
-                updateQualityUI();
+                const radio = this.querySelector('input');
+                radio.checked = true;
+                radio.dispatchEvent(new Event('change'));
             }
         });
     });
@@ -644,7 +660,6 @@
             currentInfo = data;
             formatList = data.formats;
 
-            // Show info panel
             infoPanel.style.display = 'flex';
             titleEl.textContent = data.title;
             if (data.duration) {
@@ -654,17 +669,17 @@
             } else durationEl.textContent = 'N/A';
             thumbnailDiv.innerHTML = data.thumbnail ? `<img src="${data.thumbnail}">` : 'No thumb';
 
-            // Populate custom format dropdown
-            formatSelect.innerHTML = '';
+            // Populate video custom format dropdown
+            videoFormatSelect.innerHTML = '';
             data.formats.forEach(f => {
                 const type = (f.vcodec!='none' && f.acodec!='none') ? '🎬' : (f.vcodec!='none' ? '🎥' : '🎵');
                 const label = `${type} ${f.resolution} | ${f.ext} | ${f.filesize_str}`;
                 const opt = document.createElement('option');
                 opt.value = f.format_id;
                 opt.textContent = label;
-                formatSelect.appendChild(opt);
+                videoFormatSelect.appendChild(opt);
             });
-            formatSelect.disabled = false;
+            videoFormatSelect.disabled = false;
 
             qualitySection.style.display = 'block';
             addToQueueBtn.disabled = false;
@@ -674,20 +689,22 @@
         }
     });
 
-    // Add to queue – capture current quality options
+    // Add to queue
     addToQueueBtn.addEventListener('click', () => {
         if (!currentInfo) return;
-        const selectedQuality = document.querySelector('input[name="quality"]:checked').value;
+        const type = document.querySelector('input[name="type"]:checked').value;
         let optionsText = '';
-        if (selectedQuality === 'best_combined') {
-            optionsText = '🎬 Combined';
-        } else if (selectedQuality === 'audio_only') {
+        if (type === 'video') {
+            const quality = document.querySelector('input[name="video_quality"]:checked').value;
+            if (quality === 'best') optionsText = '🎬 Best';
+            else if (quality === '1080p') optionsText = '🎬 1080p';
+            else if (quality === '720p') optionsText = '🎬 720p';
+            else if (quality === '480p') optionsText = '🎬 480p';
+            else optionsText = '🎬 Custom';
+        } else {
             const format = audioFormat.options[audioFormat.selectedIndex].text;
             const bitrate = audioBitrate.value;
             optionsText = `🎵 ${format} ${bitrate}k`;
-        } else if (selectedQuality === 'custom') {
-            // Could also show the selected format description, but keep simple
-            optionsText = '⚙️ Custom';
         }
         queue.push({
             url: urlInput.value.trim(),
@@ -699,7 +716,7 @@
         updateQueueDisplay();
     });
 
-    // Batch add URLs (no thumbnails, no options)
+    // Batch add URLs
     addUrlsBtn.addEventListener('click', () => {
         const text = batchUrls.value.trim();
         if (!text) return;
@@ -727,7 +744,6 @@
         startQueueBtn.disabled = true;
         addToQueueBtn.disabled = true;
 
-        // Reset all item progresses to 0
         queue.forEach((_, idx) => updateItemProgress(idx, 0));
 
         for (let i = 0; i < queue.length; i++) {
@@ -735,10 +751,10 @@
             statusEl.textContent = `Item ${i+1}/${queue.length}`;
             currentFileEl.textContent = item.title || item.url;
 
-            const selectedQuality = document.querySelector('input[name="quality"]:checked').value;
+            const type = document.querySelector('input[name="type"]:checked').value;
             let formatId = null;
             let options = {
-                audio_only: selectedQuality === 'audio_only',
+                audio_only: type === 'audio',
                 audio_format: audioFormat.value,
                 audio_bitrate: audioBitrate.value,
                 playlist: optPlaylist.checked,
@@ -747,8 +763,21 @@
                 embed_meta: optEmbedMeta.checked,
                 quality_choice: ''
             };
-            if (selectedQuality === 'best_combined') options.quality_choice = 'Best combined';
-            else if (selectedQuality === 'custom') formatId = formatSelect.value;
+
+            if (type === 'video') {
+                const quality = document.querySelector('input[name="video_quality"]:checked').value;
+                if (quality === 'best') {
+                    formatId = 'best[ext=mp4]/best';
+                } else if (quality === '1080p') {
+                    formatId = 'best[height<=1080][ext=mp4]';
+                } else if (quality === '720p') {
+                    formatId = 'best[height<=720][ext=mp4]';
+                } else if (quality === '480p') {
+                    formatId = 'best[height<=480][ext=mp4]';
+                } else { // custom
+                    formatId = videoFormatSelect.value;
+                }
+            }
 
             try {
                 const resp = await fetch('/api/download', {
@@ -759,40 +788,22 @@
                 const data = await resp.json();
                 if (data.error) throw new Error(data.error);
                 const downloadId = data.download_id;
-                // Store downloadId in item for possible future use
                 queue[i].downloadId = downloadId;
 
-                // Listen to progress via SSE
                 await new Promise((resolve, reject) => {
                     const es = new EventSource(`/api/progress/${downloadId}`);
                     es.addEventListener('progress', (e) => {
                         const p = JSON.parse(e.data);
-                        // Update overall progress bar (current item)
                         progressFill.style.width = p.progress + '%';
                         speedEl.textContent = `${p.speed} / ${p.eta}`;
-                        // Update per-item progress
                         updateItemProgress(i, p.progress);
                     });
-                    es.addEventListener('finished', async (e) => {
+                    es.addEventListener('finished', (e) => {
                         es.close();
-                        // Mark item as 100%
                         updateItemProgress(i, 100);
                         const fileData = JSON.parse(e.data);
-                        try {
-                            const fileResp = await fetch(fileData.file);
-                            if (!fileResp.ok) throw new Error(await fileResp.text());
-                            const blob = await fileResp.blob();
-                            const url = window.URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.href = url;
-                            const cd = fileResp.headers.get('Content-Disposition');
-                            a.download = cd ? cd.split('filename=')[1].replace(/"/g,'') : 'download';
-                            document.body.appendChild(a);
-                            a.click();
-                            a.remove();
-                            window.URL.revokeObjectURL(url);
-                            resolve();
-                        } catch (err) { reject(err); }
+                        window.location.href = fileData.file;
+                        resolve();
                     });
                     es.addEventListener('error', (e) => {
                         es.close();
@@ -801,7 +812,6 @@
                 });
             } catch (err) {
                 statusEl.textContent = `❌ ${err.message}`;
-                // Mark item progress as error? could set to 0 or keep as is
             }
         }
         statusEl.textContent = '📦 Your files are being delivered...';
@@ -818,6 +828,8 @@
     // Initial display
     updateQueueDisplay();
     updateAudioPreview();
+    toggleType(); // ensure correct section visible
+    toggleVideoCustom(); // ensure custom row hidden initially
 </script>
 </body>
 </html>
